@@ -14,8 +14,8 @@ import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.configurationprocessor.json.JSONObject;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestTemplate;
 
+import com.cupon.api.client.MeliClient;
 import com.cupon.api.process.CuponProcess;
 import com.cupon.api.service.CuponService;
 import com.cupon.api.vo.PeticionVO;
@@ -29,11 +29,12 @@ public class CuponProcessImpl implements CuponProcess{
 	
 	@Autowired
 	CuponService cuponService;
+	@Autowired
+	MeliClient meliClient;
 	
 	@Override
 	public  CuponResponse getCuponProcess(String[] item_ids, double amount) throws Exception {
 		double priceUsed =0;
-		RestTemplate restTemplate = new RestTemplate();
 		try {
 			final PeticionVO peticion = new PeticionVO();
 			peticion.setValorCupon(amount);
@@ -42,12 +43,10 @@ public class CuponProcessImpl implements CuponProcess{
 			final List<ProductoVO> todosProductos = new ArrayList<ProductoVO>();
 			
 			for (String item : item_ids) {
-				final String result = restTemplate.getForObject(uri+item, String.class);
-				final JSONObject jsonObject= new JSONObject(result);
-				
+				final JSONObject objMELI = meliClient.ClientItem(item);
 				ProductoVO producto = new ProductoVO();
 				producto.setProducto(item);
-				producto.setPrecio(jsonObject.getDouble("price"));
+				producto.setPrecio(objMELI.getDouble("price"));
 				producto.setPeticion(peticion);
 				todosProductos.add(producto);
 			}
@@ -91,14 +90,11 @@ public class CuponProcessImpl implements CuponProcess{
 	public List<Map.Entry<String,Integer>> getTopProcess() throws Exception {
 		List<Map.Entry<String,Integer>> topItems = new ArrayList<>();
 		Optional<PeticionVO> peticionVO = cuponService.findAllLastOne();
-		RestTemplate restTemplate = new RestTemplate(); 
-		JSONObject jsonObject;
 		if(peticionVO.isPresent()) {
 			try {
 				for (ProductoVO productoVO : peticionVO.get().getProductoVO()) {
 					final String producto = productoVO.getProducto();
-					String result = restTemplate.getForObject(uri+producto,String.class);
-					jsonObject = new JSONObject(result);
+					final JSONObject jsonObject= meliClient.ClientItem(producto);
 					topItems.add(new AbstractMap.SimpleEntry<>(producto, jsonObject.getInt("sold_quantity")));
 				}	
 				Collections.sort(topItems, new Comparator<Entry<String, Integer>>() {
